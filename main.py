@@ -1,151 +1,192 @@
 import streamlit as st
 from packages.ai.agents.Agent import AgentWorkFlow
 
-# Page config
 st.set_page_config(page_title="Path Finder", page_icon="🧭", layout="centered")
 
-# Initialize session state (Only if they don't exist)
-if "page" not in st.session_state:
-    st.session_state.page = 1
-if "quiz" not in st.session_state:
-    st.session_state.quiz = None
-if "current_question" not in st.session_state:
-    st.session_state.current_question = 0
-if "user_ans" not in st.session_state:
-    st.session_state.user_ans = []
-if "is_complete" not in st.session_state:
-    st.session_state.is_complete = False
-if "agent" not in st.session_state:  # FIXED: Don't overwrite to None on every rerun
-    st.session_state.agent = None
-
-# Custom CSS
 st.markdown(
     """
     <style>
-        .card { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.08); margin-top: 50px; }
-        .title { text-align: center; font-size: 28px; font-weight: 600; margin-bottom: 25px; }
-        .sub-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin-top: 10px; }
+        .main { background-color: #f8f9fa; }
+        .stButton>button { width: 100%; border-radius: 8px; height: 3em; background-color: #4CAF50; color: white; border: none; }
+        .stButton>button:hover { background-color: #45a049; border: none; }
+        .card {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            margin-bottom: 2rem;
+        }
+        .step-text { font-size: 0.9rem; color: #6c757d; text-transform: uppercase; letter-spacing: 1px; }
     </style>
 """,
     unsafe_allow_html=True,
 )
 
-# ---------------- PAGE 1 ----------------
+# ---------------- GLOBAL STATE ----------------
+if "state" not in st.session_state:
+    st.session_state.state = {}
+
+if "page" not in st.session_state:
+    st.session_state.page = 1
+
+if "agent" not in st.session_state:
+    st.session_state.agent = AgentWorkFlow()
+
 if st.session_state.page == 1:
     st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown('<div class="title">Path Finder</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-card">', unsafe_allow_html=True)
+    st.markdown('<p class="step-text">Step 1 of 3</p>', unsafe_allow_html=True)
+    st.title("🧭 Path Finder")
+    st.subheader("Let's map out your career journey.")
 
     col1, col2 = st.columns(2)
     with col1:
-        user_name = st.text_input("User", value=st.session_state.get("user_name", ""))
+        name = st.text_input(
+            "Full Name",
+            placeholder="John Doe",
+            value=st.session_state.state.get("user_name", ""),
+        )
+        education = st.selectbox(
+            "Current Education",
+            [
+                "No prior education",
+                "High School",
+                "Diploma",
+                "Undergraduate",
+                "Postgraduate",
+                "PhD",
+            ],
+        )
     with col2:
-        field = st.text_input("Field", value=st.session_state.get("field", ""))
-
-    education = st.selectbox(
-        "User Education",
-        ["High School", "Diploma", "Undergraduate", "Postgraduate", "PhD"],
-    )
-
-    work_exp = st.selectbox(
-        "Work Experience",
-        ["Fresher", "0-2 years", "2-5 years", "5-7 years", "7+ years"],
-    )
-
-    if st.button("Next →"):
-        st.session_state.user_name = user_name
-        st.session_state.field = field
-        st.session_state.education = education
-        st.session_state.WorkExperience = "Fresher" if education == "High School" else work_exp
-        st.session_state.page = 2
-        st.rerun()
-
-    st.markdown("</div></div>", unsafe_allow_html=True)
-
-# ---------------- PAGE 2 ----------------
-elif st.session_state.page == 2:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.markdown('<div class="title">Your Path Overview</div>', unsafe_allow_html=True)
-    st.markdown('<div class="sub-card">', unsafe_allow_html=True)
-
-    st.write("### 👤 User Info")
-    st.write(f"**Name:** {st.session_state.user_name}")
-    st.write(f"**Field:** {st.session_state.field}")
-    st.write(f"**Education:** {st.session_state.education}")
-    st.write(f"**Work Experience:** {st.session_state.WorkExperience}")
+        field = st.text_input(
+            "Desired Field",
+            placeholder="e.g. Data Science",
+            value=st.session_state.state.get("user_field", ""),
+        )
+        exp = st.selectbox(
+            "Years of Experience",
+            [
+                "No Experience",
+                "Fresher",
+                "0-2 years",
+                "2-5 years",
+                "5-7 years",
+                "7+ years",
+            ],
+        )
 
     st.markdown("---")
 
-    if st.button("Start Quiz"):
-        # Store the agent instance in session state so it survives reruns
-        st.session_state.agent = AgentWorkFlow()
-        st.session_state.quiz = st.session_state.agent.Generate_quiz(
-            {
-                "user_education": st.session_state.education,
-                "user_field": st.session_state.field,
-                "user_workexp": st.session_state.WorkExperience,
-            }
+    if st.button("Start with Assessment →"):
+        if not name or not field:
+            st.error("Please fill in your name and field.")
+        else:
+            st.session_state.state.update(
+                {
+                    "user_name": name,
+                    "user_field": field,
+                    "user_education": education,
+                    "user_workexp": exp,
+                }
+            )
+            st.session_state.page = 2
+            st.rerun()
+
+    if st.button("Direct Roadmap (No Quiz)", type="secondary"):
+        if not name or not field:
+            st.warning("Please enter your name and field above before skipping.")
+        else:
+            st.session_state.state.update(
+                {
+                    "user_name": name,
+                    "user_field": field,
+                    "user_education": education,
+                    "user_workexp": exp,
+                }
+            )
+            with st.spinner("Our AI is generating your roadmap..."):
+                st.session_state.agent._generate_direct_roadmap(st.session_state.state)
+                st.session_state.page = 3
+                st.rerun()
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# ---------------- PAGE 2: ASSESSMENT ----------------
+
+elif st.session_state.page == 2:
+    state = st.session_state.state
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown('<p class="step-text">Step 2 of 3</p>', unsafe_allow_html=True)
+    st.title("Skill Assessment")
+
+    with st.expander("👤 Review My Profile"):
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Field", state["user_field"])
+        c2.metric("Education", state["user_education"])
+        c3.metric("Experience", state["user_workexp"])
+
+    if "Question" not in state:
+        st.info(
+            "To generate a personalized roadmap, we need to test your current knowledge in this field."
         )
-        st.session_state.current_question = 0
-        st.session_state.user_ans = []
-        st.session_state.is_complete = False
-        st.rerun()
+        if st.button("🚀 Start Skill Quiz"):
+            with st.spinner("Generating questions..."):
+                st.session_state.agent.Generate_quiz(state)
+                state["UserAnswer"] = []
+                state["q_idx"] = 0
+                st.rerun()
 
-    # Quiz Question Display
-    if st.session_state.quiz and not st.session_state.is_complete:
-        q_idx = st.session_state.current_question
-        quiz = st.session_state.quiz
+    elif "Question" in state and not state.get("complete"):
+        q_idx = state.get("q_idx", 0)
+        total_q = len(state["Question"])
 
-        st.write(f"#### Question {q_idx + 1}")
-        st.write(quiz["Question"][q_idx])
+        progress = (q_idx) / total_q
+        st.progress(progress)
+        st.caption(f"Question {q_idx + 1} of {total_q}")
+
+        st.markdown(f"### {state['Question'][q_idx]}")
 
         selected = st.radio(
-            "Choose your answer:",
-            quiz["AnswerKeys"][q_idx],
-            key=f"q_radio_{q_idx}",
+            "Choose the best option:", state["AnswerKeys"][q_idx], key=f"q_{q_idx}"
         )
 
         if st.button("Submit Answer"):
-            st.session_state.user_ans.append(selected)
-            if st.session_state.current_question + 1 < len(quiz["Question"]):
-                st.session_state.current_question += 1
+            state["UserAnswer"].append(selected)
+            if q_idx + 1 < total_q:
+                state["q_idx"] += 1
             else:
-                st.session_state.is_complete = True
-                st.toast("You have completed the quiz!")
+                state["complete"] = True
             st.rerun()
 
-    # Results Display
-    if st.session_state.is_complete:
-        st.success("Quiz Completed!")
-        
-        if st.button("Show answers"):
-            # FIXED: Changed .Question to ["Question"] to match dictionary format
-            questions = st.session_state.quiz["Question"]
-            correct_ans = st.session_state.quiz["CorrectAnswer"]
-            user_answers = st.session_state.user_ans
+    if state.get("complete"):
+        st.balloons()
+        st.success("Success! Assessment Finished.")
+        if st.button("✨ Generate My Roadmap"):
+            with st.spinner("Our AI is analyzing your answers...."):
+                st.session_state.agent.Quiz_Evalutation(state)
+                st.toast("Evaluation Completed")
+                with st.spinner("Our AI is generating your roadmap....."):
+                    st.session_state.agent.generate_roadmap(state)
+                    st.session_state.page = 3
+                    st.rerun()
 
-            for i in range(len(user_answers)):
-                with st.expander(f"Question {i+1}"):
-                    st.write(f"**Q:** {questions[i]}")
-                    st.write(f"**Your Answer:** {user_answers[i]}")
-                    st.write(f"**Correct Answer:** {correct_ans[i]}")
+    st.markdown("</div>", unsafe_allow_html=True)
 
-        if st.button("Show Evaluation"):
-            if st.session_state.agent:
-                output = st.session_state.agent.Quiz_Evalutation(
-                    {
-                        "Question": st.session_state.quiz["Question"],
-                        "CorrectAnswer": st.session_state.quiz["CorrectAnswer"],
-                        "UserAnswer": st.session_state.user_ans,
-                    }
-                )
-                st.info(f"**Feedback:** {output.Feedback}")
-                st.metric("Score", f"{output.Score}")
-            else:
-                st.error("Agent session lost. Please restart the quiz.")
+# ---------------- PAGE 3: ROADMAP ----------------
 
-    if st.button("← Back"):
+elif st.session_state.page == 3:
+    state = st.session_state.state
+    st.markdown('<p class="step-text">Final Result</p>', unsafe_allow_html=True)
+    st.title("🗺️ Your Personalized Career Path")
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+
+    roadmap_content = state.get("roadmap", "No roadmap generated")
+    st.markdown(roadmap_content)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    if st.button("🔄 Restart Path Finder"):
+        st.session_state.state = {}
         st.session_state.page = 1
         st.rerun()
-
-    st.markdown("</div></div>", unsafe_allow_html=True)
