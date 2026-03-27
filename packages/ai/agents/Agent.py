@@ -1,15 +1,15 @@
 from langchain_mistralai import ChatMistralAI
 from dotenv import load_dotenv
-from langgraph.graph import StateGraph, START, END
-from typing import TypedDict, Annotated
+from typing import TypedDict, List
 from pydantic import BaseModel, Field
-from langgraph.types import interrupt
+
+from packages.ai.prompts.evaluate_quiz import evaluate_quiz_prompt
+from packages.ai.prompts.generate_quiz import generate_quiz_prompt
+from packages.ai.prompts.generate_roadmap import generate_roadmap_prompt
+from packages.ai.prompts.direct_roadmap import generate_direct_roadmap
 
 
 class State(TypedDict):
-    # =======================
-    #      USER INPUT      #
-    # =======================
     user_field: str
     user_education: str
     user_workexp: str
@@ -20,172 +20,74 @@ class State(TypedDict):
     UserAnswer: list[str]
 
     Feedback: str
-    Score: float
-    iteration: int
+    Score: int
+    strength: str
+    weakness: str
+    roadmap: str
 
 
-class Evalution_model_output(BaseModel):
-    Feedback: str = Field("for provided results generate a feedback for the user")
-    score: int = Field("Provided the score for the user.")
+class EvaluationOutput(BaseModel):
+    score: str
+    strengths: List[str]
+    weaknesses: List[str]
+    feedback: str
 
 
-class Option(BaseModel):
-    label: str
-    text: str
-
-
-class Quiz_Generator_model_output(BaseModel):
-    Question: list[str] = Field(description="List of Questions number wise")
-    AnswerKeys: list[list[Option]] = Field(
-        description="List of answer keys for Questions"
-    )
-    CorrectAnswer: list[str] = Field(
-        description="List of correct answers for Questions"
+class QuizGeneratorOutput(BaseModel):
+    Question: List[str] = Field(description="List questions")
+    AnswerKeys: List[List[str]] = Field(description="Each question has 4 options")
+    CorrectAnswer: List[str] = Field(
+        description="Correct option per question (A/B/C/D)"
     )
 
 
 class AgentWorkFlow:
     def __init__(self):
+        load_dotenv()
 
-        if load_dotenv():
-            print("API Verified Successfully")
-        else:
-            print("API Not verfied")
+        self.quiz_model = ChatMistralAI(
+            model="mistral-medium-latest", temperature=0.8
+        ).with_structured_output(QuizGeneratorOutput)
 
-        Quiz_Generator_model = ChatMistralAI(
-            model="mistral-medium-latest",
-            temperature=0.8,
-        )
+        self.eval_model = ChatMistralAI(
+            model="mistral-medium-latest", temperature=0.2
+        ).with_structured_output(EvaluationOutput)
 
-        self.Quiz_Generator_model = Quiz_Generator_model.with_structured_output(
-            Quiz_Generator_model_output
-        )
-
-        Evaluation_model = ChatMistralAI(
-            model="magistral-medium-latest", temperature=0.2
-        )
-        self.Evaluation_model = Evaluation_model.with_structured_output(
-            Evalution_model_output
-        )
-
-        self.Roadmap_Generator_model = ChatMistralAI(
-            model="mistral-small-2603", temperature=0.8
-        )
+        self.roadmap_model = ChatMistralAI(model="mistral-small-2603", temperature=0.4)
 
     def Generate_quiz(self, state: State) -> State:
-        prompt = f"""
-                <ROLE_AND_OBJECTIVE>
-        You are an intelligent QUIZ GENERATION AGENT.
+        prompt = generate_quiz_prompt(state)
 
-        Your goal:
-        - Generate a high-quality, personalized quiz based on user profile inputs.
-        - The quiz must be tailored to the user's:
-        - Education level
-        - Field/domain
-        - Work experience
-        - The quiz should contain EXACTLY 10 questions.
+        output = self.quiz_model.invoke(prompt)
+        state["Question"] = output.Question
+        state["AnswerKeys"] = output.AnswerKeys
+        state["CorrectAnswer"] = output.CorrectAnswer
 
-        </ROLE_AND_OBJECTIVE>
-        <INPUT_SPECIFICATION>
-        You will receive structured user input in the following format:
-        education: {state['user_education']},
-        field: {state['user_field']},
-        experience: {state['user_workexp']}
-        </INPUT_SPECIFICATION>
-
-        <QUIZ_GENERATION_RULES>
-        1. TOTAL QUESTIONS:
-        - Always generate EXACTLY 10 questions (no more, no less).
-
-        2. DIFFICULTY DISTRIBUTION:
-        - Beginner: 20%
-        - Intermediate: 50%
-        - Advanced: 30%
-
-        3. QUESTION TYPES:
-        - Mix of:
-            - Multiple Choice Questions (MCQs)
-            - Scenario-based questions
-            - Conceptual understanding questions
-
-        4. PERSONALIZATION LOGIC:
-        - Education level determines baseline complexity.
-        - Field determines topic relevance.
-        - Experience determines depth and real-world application.
-
-        5. MCQ STRUCTURE:
-        Each MCQ must include:
-        - Question
-        - 4 options (A, B, C, D)
-        - Correct answer
-        - Brief explanation (1–2 lines)
-
-        6. QUALITY REQUIREMENTS:
-        - Questions must be clear, non-ambiguous, and realistic.
-        - Avoid trivial or overly generic questions.
-        - Ensure no repeated or redundant questions.
-        </QUIZ_GENERATION_RULES>
-        """
-
-        output = self.Quiz_Generator_model.invoke(prompt)
-
-        return {
-            "Question": output.Question,
-            "AnswerKeys": output.AnswerKeys,
-            "CorrectAnswer": output.CorrectAnswer,
-        }
+        return state
 
     def Quiz_Evalutation(self, state: State) -> State:
-        prompt = f"""
-                    <ROLE>
-            You are a precise and analytical MCQ Evaluation Agent.
+        prompt = evaluate_quiz_prompt(state)
+        response = self.eval_model.invoke(prompt)
 
-            Your job is to evaluate a user's quiz performance strictly based on selected options.
-            You act like an automated grading system with intelligent feedback capabilities.
-            </ROLE>
+        state["Score"] = response.score
+        state["Feedback"] = response.feedback
+        state["strength"] = response.strengths
+        state["weakness"] = response.weaknesses
 
-            <OBJECTIVE>
-            - Compare user-selected answers with correct options.
-            - Calculate score accurately.
-            - Identify patterns in mistakes.
-            - Provide concise, meaningful feedback.
-            </OBJECTIVE>
+        return state
 
-            <INPUT_FORMAT>
-            "domain": "<domain_name>",
-            "questions":
-                "question": {state['Question']},
-                "correct_option": {state['CorrectAnswer']},
-                "user_selected": {state['UserAnswer']}
-            </INPUT_FORMAT>
+    def _generate_direct_roadmap(self, state: State) -> State:
 
-            <EVALUATION_LOGIC>
-            For each question:
+        prompt = generate_direct_roadmap(state)
+        response = self.roadmap_model.invoke(prompt)
+        state["roadmap"] = response.content
 
-            - If user_selected == correct_option:
-                → Mark as "Correct"
-                → Score = 1
+        return state
 
-            - Else:
-                → Mark as "Incorrect"
-                → Score = 0
+    def generate_roadmap(self, state: State) -> State:
+        prompt = generate_roadmap_prompt(state)
 
-            No partial marking unless explicitly stated.
-            </EVALUATION_LOGIC>
+        response = self.roadmap_model.invoke(prompt)
+        state["roadmap"] = response.content
 
-            <SCORING_RULES>
-            - Total Score = Sum of all correct answers
-            - Accuracy (%) = (Total Score / Total Questions) * 100
-
-            </SCORING_RULES>
-
-            <PERFORMANCE_LEVEL>
-            - Beginner: < 40%
-            - Intermediate: 40% – 75%
-            - Advanced: > 75%
-            </PERFORMANCE_LEVEL>
-        """
-
-        response = self.Evaluation_model.invoke(prompt)
-
-        return {"Feedback": response.Feedback, "Score": response.score}
+        return state
