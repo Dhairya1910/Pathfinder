@@ -42,13 +42,16 @@ Pathfinder guides users through a structured 3-step workflow:
 ```
 Pathfinder/
 │
-├── apps/                  # Frontend & Backend (in development)
+├── apps/
+│   ├── api/               # Express + TypeScript API
+│   └── web/               # Vite + React + Tailwind UI
 │
 ├── packages/
 │   └── ai/
 │       ├── agents/
-│       │   └── Agent.py   # Core AI workflow
-│       └── prompts/       # Prompt templates
+│       │   └── Agent.py   # Core AI workflow (also used by Streamlit)
+│       ├── prompts/       # Prompt templates
+│       └── bridge.py      # JSON stdin/stdout bridge for the web API
 │
 ├── .env                   # Environment variables
 ├── main.py                # Entry point
@@ -142,7 +145,56 @@ Generated directly from user profile.
 
 ---
 
-## Frontend (Streamlit)
+## Web app (React + Node)
+
+The web experience is a React frontend backed by an Express API. The Node
+server keeps workflow state in memory and invokes the unchanged Python AI
+workflow through `packages.ai.bridge`.
+
+### Development
+
+Install the JavaScript workspaces from the repository root:
+
+```bash
+npm install
+cp .env.example .env.local
+npm run dev
+```
+
+The API runs on `http://localhost:4000` and the Vite frontend on
+`http://localhost:5173`. Set `MISTRAL_API_KEY` for real AI calls, or set
+`MOCK_AI=1` to use deterministic local fixtures without an API key.
+
+### Production
+
+Build both workspaces and run the single-port server:
+
+```bash
+npm run build
+MISTRAL_API_KEY=your_api_key_here npm start
+```
+
+The API serves `apps/web/dist` when it exists. Configure `PORT` (default
+`4000`) and `PYTHON_CMD` (default `uv run python`) as needed.
+
+### API endpoints
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| GET | `/api/health` | Report API and AI configuration |
+| POST | `/api/sessions` | Create a profile session |
+| GET | `/api/sessions/:id` | Read sanitized session state |
+| POST | `/api/sessions/:id/quiz` | Generate assessment questions |
+| POST | `/api/sessions/:id/quiz/answers` | Evaluate submitted answers |
+| POST | `/api/sessions/:id/roadmap` | Generate an assessment-based roadmap |
+| POST | `/api/sessions/:id/roadmap/direct` | Generate a roadmap without an assessment |
+
+Correct answers are retained only on the server and are never included in API
+responses. `MOCK_AI=1` is intended for development and UI testing; it skips
+the Python bridge and supplies deterministic quiz, evaluation, and markdown
+roadmap fixtures.
+
+## Frontend (Streamlit alternative)
 
 The UI is built using Streamlit and follows a multi-step flow:
 
