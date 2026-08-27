@@ -15,7 +15,9 @@ app.use(express.json());
 
 function aiUnavailable(response: Response): boolean {
   if (mock || process.env.MISTRAL_API_KEY) return false;
-  response.status(503).json({ error: "MISTRAL_API_KEY is missing. Add it to .env or enable MOCK_AI=1 for local development." });
+  response.status(503).json({
+    error: "MISTRAL_API_KEY is missing. Add it to .env or enable MOCK_AI=1 for local development.",
+  });
   return true;
 }
 
@@ -28,7 +30,11 @@ function getSession(id: string, response: Response): Session | undefined {
 function sanitize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(sanitize);
   if (typeof value === "object" && value !== null) {
-    return Object.fromEntries(Object.entries(value).filter(([key]) => key !== "CorrectAnswer").map(([key, entry]) => [key, sanitize(entry)]));
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([key]) => key !== "CorrectAnswer")
+        .map(([key, entry]) => [key, sanitize(entry)]),
+    );
   }
   return value;
 }
@@ -38,17 +44,23 @@ function list(value: string[] | string | undefined): string[] {
   return value ? [value] : [];
 }
 
-async function runAction(action: string, session: Session, response: Response): Promise<WorkflowState | undefined> {
+async function runAction(
+  action: string,
+  session: Session,
+  response: Response,
+): Promise<WorkflowState | undefined> {
   if (aiUnavailable(response)) return undefined;
   if (mock) {
     if (action === "generate_quiz") session.state = mockQuiz(session.state);
-    else if (action === "evaluate_quiz") session.state = mockEvaluation(session.state).state;
+    else if (action === "evaluate_quiz") session.state = mockEvaluation(session.state);
     else session.state = mockRoadmap(session.state);
     return session.state;
   }
   const result = await callBridge(action, session.state);
   if (result.error || !result.state) {
-    console.error(`Bridge ${action} failed: ${result.error || "empty state"}${result.stderr ? `\n${result.stderr}` : ""}`);
+    console.error(
+      `Bridge ${action} failed: ${result.error || "empty state"}${result.stderr ? `\n${result.stderr}` : ""}`,
+    );
     response.status(502).json({ error: result.error || "AI bridge failed" });
     return undefined;
   }
@@ -67,9 +79,17 @@ app.post("/api/sessions", (request: Request<unknown, unknown, Partial<ProfileInp
     return;
   }
   const sessionId = randomUUID();
-  const state: WorkflowState = { user_name: name.trim(), user_field: field.trim(), user_education: education, user_workexp: experience };
+  const state: WorkflowState = {
+    user_name: name.trim(),
+    user_field: field.trim(),
+    user_education: education,
+    user_workexp: experience,
+  };
   sessions.set(sessionId, { state });
-  response.status(201).json({ sessionId, profile: { name: state.user_name, field: state.user_field, education, experience } });
+  response.status(201).json({
+    sessionId,
+    profile: { name: state.user_name, field: state.user_field, education, experience },
+  });
 });
 
 app.get("/api/sessions/:id", (request, response) => {
@@ -82,31 +102,45 @@ app.post("/api/sessions/:id/quiz", async (request, response) => {
   if (!session) return;
   const state = await runAction("generate_quiz", session, response);
   if (!state) return;
-  const questions: QuizQuestion[] = (state.Question || []).map((question, index) => ({ index, question, options: state.AnswerKeys?.[index] || [] }));
+  const questions: QuizQuestion[] = (state.Question || []).map((question, index) => ({
+    index,
+    question,
+    options: state.AnswerKeys?.[index] || [],
+  }));
   response.json({ questions, total: questions.length });
 });
 
-app.post("/api/sessions/:id/quiz/answers", async (request: Request<{ id: string }, unknown, { answers?: string[] }>, response) => {
-  const session = getSession(request.params.id, response);
-  if (!session) return;
-  const answers = request.body?.answers;
-  const total = session.state.Question?.length || 0;
-  if (!Array.isArray(answers) || answers.length !== total) {
-    response.status(400).json({ error: `Expected ${total} answers.` });
-    return;
-  }
-  session.state.UserAnswer = answers;
-  const state = await runAction("evaluate_quiz", session, response);
-  if (!state) return;
-  const evaluation: Evaluation = { score: state.Score || "0", strengths: list(state.strength), weaknesses: list(state.weakness), feedback: state.Feedback || "" };
-  response.json(evaluation);
-});
+app.post(
+  "/api/sessions/:id/quiz/answers",
+  async (request: Request<{ id: string }, unknown, { answers?: string[] }>, response) => {
+    const session = getSession(request.params.id, response);
+    if (!session) return;
+    const answers = request.body?.answers;
+    const total = session.state.Question?.length || 0;
+    if (!Array.isArray(answers) || answers.length !== total) {
+      response.status(400).json({ error: `Expected ${total} answers.` });
+      return;
+    }
+    session.state.UserAnswer = answers;
+    const state = await runAction("evaluate_quiz", session, response);
+    if (!state) return;
+    const evaluation: Evaluation = {
+      score: state.Score || "0",
+      strengths: list(state.strength),
+      weaknesses: list(state.weakness),
+      feedback: state.Feedback || "",
+    };
+    response.json(evaluation);
+  },
+);
 
 app.post("/api/sessions/:id/roadmap", async (request, response) => {
   const session = getSession(request.params.id, response);
   if (!session) return;
   if (!session.state.Score) {
-    response.status(409).json({ error: "Complete the quiz evaluation before generating this roadmap." });
+    response
+      .status(409)
+      .json({ error: "Complete the quiz evaluation before generating this roadmap." });
     return;
   }
   const state = await runAction("generate_roadmap", session, response);

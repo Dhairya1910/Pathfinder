@@ -1,5 +1,5 @@
 /* DEV-ONLY deterministic fixtures used when MOCK_AI=1. */
-import type { Evaluation, WorkflowState } from "./types.js";
+import type { WorkflowState } from "./types.js";
 
 const questions = [
   "Which data structure provides average O(1) key lookup?",
@@ -20,29 +20,59 @@ const options = [
   ["A. DRY", "B. KISS", "C. Single Responsibility", "D. YAGNI"],
   ["A. Encrypt rows", "B. Speed up lookups", "C. Validate forms", "D. Compress tables"],
   ["A. Responsive layout", "B. Static pixels", "C. Server rendering", "D. Minification"],
-  ["A. The whole system", "B. One small behavior", "C. Production traffic", "D. The database backup"],
+  [
+    "A. The whole system",
+    "B. One small behavior",
+    "C. Production traffic",
+    "D. The database backup",
+  ],
   ["A. git merge", "B. git branch", "C. git switch -c", "D. git clone"],
   ["A. A JSON string", "B. A parsed object", "C. A stream", "D. A buffer"],
   ["A. WHERE", "B. ORDER BY", "C. HAVING", "D. LIMIT"],
   ["A. Plain text", "B. Base64", "C. A salted password hash", "D. A URL parameter"],
 ];
 
-const correctAnswers = ["A. Hash map", "B. Created", "C. Single Responsibility", "B. Speed up lookups", "A. Responsive layout", "B. One small behavior", "C. git switch -c", "A. A JSON string", "C. HAVING", "C. A salted password hash"];
+const correctAnswers = [
+  "A. Hash map",
+  "B. Created",
+  "C. Single Responsibility",
+  "B. Speed up lookups",
+  "A. Responsive layout",
+  "B. One small behavior",
+  "C. git switch -c",
+  "A. A JSON string",
+  "C. HAVING",
+  "C. A salted password hash",
+];
 
 export function mockQuiz(state: WorkflowState): WorkflowState {
   return { ...state, Question: questions, AnswerKeys: options, CorrectAnswer: correctAnswers };
 }
 
-export function mockEvaluation(state: WorkflowState): { state: WorkflowState; evaluation: Evaluation } {
+export function mockEvaluation(state: WorkflowState): WorkflowState {
   const answers = state.UserAnswer ?? [];
-  const score = answers.reduce((total, answer, index) => total + (answer === correctAnswers[index] ? 1 : 0), 0);
-  const evaluation: Evaluation = {
-    score: `${score} / ${questions.length}`,
-    strengths: ["You recognize core web and software engineering vocabulary.", "Your answers show a solid foundation in data structures and HTTP.", "You can connect practical development tools to their intended use."],
-    weaknesses: ["Keep strengthening database querying and aggregation concepts.", "Practice translating principles into architecture and testing decisions.", "Revisit secure credential handling and its operational trade-offs."],
-    feedback: `You scored ${score} out of ${questions.length}. Build depth through small projects that combine an API, database, tests, and a responsive interface, then revisit the missed concepts with deliberate practice.`,
+  const score = answers.reduce(
+    (total, answer, index) => total + (answer === correctAnswers[index] ? 1 : 0),
+    0,
+  );
+  const strengths = [
+    "You recognize core web and software engineering vocabulary.",
+    "Your answers show a solid foundation in data structures and HTTP.",
+    "You can connect practical development tools to their intended use.",
+  ];
+  const weaknesses = [
+    "Keep strengthening database querying and aggregation concepts.",
+    "Practice translating principles into architecture and testing decisions.",
+    "Revisit secure credential handling and its operational trade-offs.",
+  ];
+  const feedback = `You scored ${score} out of ${questions.length}. Build depth through small projects that combine an API, database, tests, and a responsive interface, then revisit the missed concepts with deliberate practice.`;
+  return {
+    ...state,
+    Score: `${score} / ${questions.length}`,
+    strength: strengths,
+    weakness: weaknesses,
+    Feedback: feedback,
   };
-  return { state: { ...state, Score: evaluation.score, strength: evaluation.strengths, weakness: evaluation.weaknesses, Feedback: evaluation.feedback }, evaluation };
 }
 
 const roadmap = `# Your Pathfinder Roadmap
