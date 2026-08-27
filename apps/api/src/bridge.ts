@@ -20,15 +20,23 @@ export function callBridge(action: string, state: WorkflowState): Promise<Bridge
     child.stdin.end();
     let stdout = "";
     let stderr = "";
-    child.stdout.on("data", (chunk: Buffer) => { stdout += chunk.toString(); });
-    child.stderr.on("data", (chunk: Buffer) => { stderr += chunk.toString(); });
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
     child.on("error", (error: Error) => resolve({ error: error.message, stderr, exitCode: null }));
     child.on("close", (exitCode) => {
       try {
         const parsed: unknown = JSON.parse(stdout);
         if (typeof parsed === "object" && parsed !== null && "error" in parsed) {
           const error = (parsed as { error?: unknown }).error;
-          resolve({ error: typeof error === "string" ? error : "Python bridge failed", stderr, exitCode });
+          resolve({
+            error: typeof error === "string" ? error : "Python bridge failed",
+            stderr,
+            exitCode,
+          });
         } else {
           resolve({ state: parsed as WorkflowState, stderr, exitCode });
         }

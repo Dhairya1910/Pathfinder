@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import sys
 from contextlib import redirect_stdout
+from collections.abc import Callable
 from typing import Any
 
 def _run(action: str, state: dict[str, Any]) -> dict[str, Any]:

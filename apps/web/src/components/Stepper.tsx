@@ -15,10 +15,18 @@ export function Stepper({ current }: StepperProps) {
   return (
     <nav className="stepper" aria-label="Progress">
       {steps.map((step, index) => (
-        <div className={`step ${index < currentIndex ? "complete" : ""} ${step.id === current ? "active" : ""}`} key={step.id}>
+        <div
+          className={`step ${index < currentIndex ? "complete" : ""} ${step.id === current ? "active" : ""}`}
+          key={step.id}
+        >
           <div className="step-marker">{index < currentIndex ? "✓" : index + 1}</div>
-          <div><strong>{step.label}</strong><span>{step.note}</span></div>
-          {index < steps.length - 1 && <div className={`step-line ${index < currentIndex ? "filled" : ""}`} />}
+          <div>
+            <strong>{step.label}</strong>
+            <span>{step.note}</span>
+          </div>
+          {index < steps.length - 1 && (
+            <div className={`step-line ${index < currentIndex ? "filled" : ""}`} />
+          )}
         </div>
       ))}
     </nav>
